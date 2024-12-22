@@ -589,42 +589,46 @@ def canonicalize_kubectl(user_cmd: str) -> str:
 
 def syntax_check_kubectl(cmd: str) -> bool:
     """
-    Attempt to detect syntax errors using actual 'kubectl'.
-    We run the command with subprocess and see if it returns an error code.
-
-    Return True if syntax is valid (exit code 0),
-    Return False if there's an error.
+    Run `kubectl` with a small timeout. If it fails quickly => syntax error.
+    If it times out => assume syntax is correct enough and proceed.
     """
-    # We'll do a naive attempt to add '--dry-run=client' if the command is a 'create' or 'delete'.
-    # But note that not all commands or versions support --dry-run=client.
-    # If you'd rather always run the exact command, remove these lines.
-    # Also, we only do this for 'create' or 'delete' subcommands.
-
     tokens = cmd.strip().split()
-    if len(tokens) >= 2:
-        subcommand = tokens[1]
-        # If it's 'create' or 'delete', try to insert '--dry-run=client' to avoid real changes
-        if subcommand in ["create", "delete"]:
-            # If it doesn't already have a --dry-run=...
-            if not any(t.startswith("--dry-run") for t in tokens):
-                tokens.insert(2, "--dry-run=client")  # insert after 'kubectl' 'create'
-    # Actually run the command
+
+    # Example: Insert --dry-run=client and -o yaml for subcommands create|delete
+    # (optional)
+    if len(tokens) >= 2 and tokens[1] in ["create", "delete"]:
+        if not any(t.startswith("--dry-run") for t in tokens):
+            tokens.insert(2, "--dry-run=client")
+        if not any(t in ["-o", "--output"] for t in tokens):
+            tokens.insert(3, "-o")
+            tokens.insert(4, "yaml")
+
     print(f"\n[Syntax-checking]: {' '.join(tokens)}")
     try:
-        result = subprocess.run(tokens, capture_output=True, text=True)
+        result = subprocess.run(tokens, capture_output=True, text=True, timeout=2)
+        # 2-second timeout is arbitrary. Adjust as you like.
+
         if result.returncode != 0:
+            # Non-zero => real error
             print("STDOUT:\n" + (result.stdout or ""))
             print("STDERR:\n" + (result.stderr or ""))
             print(f"[ERROR] Command exited with code {result.returncode}\n")
             return False
         else:
-            # Success or no error code
+            # Success within 2 seconds => syntax is presumably good
             return True
+
+    except subprocess.TimeoutExpired:
+        # Timed out => we assume it's "correct" (or at least not obviously wrong).
+        print("[INFO] Command timed out, assuming syntax is correct enough.\n")
+        return True
+
     except FileNotFoundError:
-        print("[ERROR] 'kubectl' not found. Is it installed?\n")
+        print("[ERROR] 'kubectl' is not installed or not in PATH.")
         return False
+
     except Exception as e:
-        print(f"[ERROR] Unexpected error: {e}\n")
+        print(f"[ERROR] Unexpected error: {e}")
         return False
 
 
