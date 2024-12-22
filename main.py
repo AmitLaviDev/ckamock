@@ -4,14 +4,9 @@ import re
 import subprocess
 import textwrap
 
-# A list of questions. Each item has:
-#   "question": the text shown to the user
-#   "reference": a multi-line string with the official answer
-#   "checklist": a list of keywords/phrases we want to see in the user's answer
-#   "notes": any special instructions or known issues in the official answer
-#
-# We also handle "special_handling" for question 10 to show partial mock outputs
-# if the user omitted certain pipes.
+################################################################################
+# The Q_AND_A list with 17 questions, references, checklists, etc.
+################################################################################
 Q_AND_A = [
     {
         "question": textwrap.dedent(
@@ -30,13 +25,12 @@ Q_AND_A = [
             """\
             kubectl create clusterrole deployment-clusterrole --verb=create --resource=deployments,statefulsets,daemonsets
             kubectl create serviceaccount cicd-token --namespace=app-team1
-            kubectl create rolebinding deployment-clusterrole \
-              --clusterrole=deployment-clusterrole \
-              --serviceaccount=app-team1:cicd-token \
+            kubectl create rolebinding deployment-clusterrole \\
+              --clusterrole=deployment-clusterrole \\
+              --serviceaccount=app-team1:cicd-token \\
               --namespace=app-team1
         """
         ),
-        # We'll look for these crucial bits:
         "checklist": [
             "kubectl create clusterrole deployment-clusterrole",
             "--verb=create",
@@ -48,7 +42,7 @@ Q_AND_A = [
             "--serviceaccount=app-team1:cicd-token",
         ],
         "notes": [
-            "Watch out: The official solution in the original text used '--serviceaccount=default:cicd-token', but that is likely incorrect. We want app-team1:cicd-token."
+            "Watch out: The original text had '--serviceaccount=default:cicd-token'. The correct approach uses 'app-team1:cicd-token'."
         ],
         "special_handling": None,
     },
@@ -144,7 +138,7 @@ Q_AND_A = [
             "snapshot restore /var/lib/backup/etcd-snapshot-previous.db",
         ],
         "notes": [
-            "Original text had mismatches like /etc/data path, or 'previoys.db'. This corrected version uses /srv/data and 'previous.db'."
+            "Original text had mismatches like /etc/data or 'previoys.db'. This corrected version uses /srv/data and 'previous.db'."
         ],
         "special_handling": None,
     },
@@ -181,7 +175,7 @@ Q_AND_A = [
             "port: 9000",
         ],
         "notes": [
-            "We simplified the official answer to highlight the same-namespace access requirement. Real-world usage may differ."
+            "We simplified the official answer to highlight same-namespace access. Real usage may differ."
         ],
         "special_handling": None,
     },
@@ -195,7 +189,7 @@ Q_AND_A = [
         ),
         "reference": textwrap.dedent(
             """\
-            # In the Deployment YAML (just the relevant snippet):
+            # In the Deployment spec:
             spec:
               containers:
               - name: nginx
@@ -204,7 +198,7 @@ Q_AND_A = [
                 - name: http
                   containerPort: 80
 
-            # Then expose it as NodePort:
+            # Then expose it:
             kubectl expose deployment front-end --name=front-end-svc \
               --port=80 --target-port=80 --type=NodePort
         """
@@ -217,7 +211,7 @@ Q_AND_A = [
             "--type=NodePort",
         ],
         "notes": [
-            "The official answer only gave 'kubectl expose' previously, but the question also specifically wanted a port spec in the container."
+            "The official answer originally only had 'kubectl expose', but we also need the container port in the Deployment spec."
         ],
         "special_handling": None,
     },
@@ -273,12 +267,11 @@ Q_AND_A = [
             8) Scale the deployment 'loadbalancer' to 6 pods.
         """
         ),
-        "reference": textwrap.dedent(
-            """\
-            kubectl scale deploy loadbalancer --replicas=6
-        """
-        ),
-        "checklist": ["kubectl scale deploy loadbalancer", "--replicas=6"],
+        "reference": "kubectl scale deploy loadbalancer --replicas=6",
+        "checklist": [
+            "kubectl scale deploy loadbalancer",
+            "--replicas=6",
+        ],
         "notes": [],
         "special_handling": None,
     },
@@ -339,7 +332,6 @@ Q_AND_A = [
             "/opt/nodenum",
         ],
         "notes": ["We can 'mock' partial output if you forget certain pipes."],
-        # We'll implement special handling to show partial commands' outputs.
         "special_handling": "q10",
     },
     {
@@ -377,7 +369,7 @@ Q_AND_A = [
             "image: memcached",
             "image: consul",
         ],
-        "notes": ["Watch out for spelling: not 'memchached'."],
+        "notes": ["Watch out for spelling: it's 'memcached', not 'memchached'!"],
         "special_handling": None,
     },
     {
@@ -554,7 +546,10 @@ Q_AND_A = [
             echo <podname> >> /opt/KUT00401/KUT00401.txt
         """
         ),
-        "checklist": ["kubectl top pod -l name=cpu-user", "/opt/KUT00401/KUT00401.txt"],
+        "checklist": [
+            "kubectl top pod -l name=cpu-user",
+            "/opt/KUT00401/KUT00401.txt",
+        ],
         "notes": [],
         "special_handling": None,
     },
@@ -573,22 +568,32 @@ Q_AND_A = [
             systemctl enable kubelet
         """
         ),
-        "checklist": ["systemctl start kubelet", "systemctl enable kubelet"],
+        "checklist": [
+            "systemctl start kubelet",
+            "systemctl enable kubelet",
+        ],
         "notes": [],
         "special_handling": None,
     },
 ]
 
 
+################################################################################
+# Utility Functions
+################################################################################
+
+
 def canonicalize_kubectl(cmd: str) -> str:
-    """Replace standalone 'k' with 'kubectl'."""
+    """
+    Replace standalone 'k' with 'kubectl', so users can type `k get pods`.
+    """
     return re.sub(r"\bk\b", "kubectl", cmd)
 
 
 def run_help_command(cmd: str):
     """
     Directly run `kubectl ... --help` with no timeout,
-    show its output, but don't store it in the final answer.
+    show its output, but do NOT store it in the final answer.
     """
     tokens = cmd.strip().split()
     print(f"\n[Running help command]: {cmd}\n{'-'*40}")
@@ -609,18 +614,20 @@ def run_help_command(cmd: str):
 
 def syntax_check_kubectl(cmd: str, timeout_secs: int = 2) -> bool:
     """
-    Attempts to run the command in a short timeout, so we can catch quick syntax errors.
-    If it times out => assume syntax is correct (to avoid blocking).
-    If it returns an error => syntax is incorrect.
+    Attempts to run the command with a short timeout to catch quick syntax errors.
+    If it times out => assume syntax is correct (to avoid a hang).
+    If it returns an error code => syntax is incorrect.
+
+    We optionally insert --dry-run=client and -o yaml for 'create'/'delete' commands,
+    so we don't actually modify the cluster (though this can cause hangs for certain resources).
     """
     tokens = cmd.strip().split()
 
-    # Attempt to insert --dry-run=client and -o yaml for 'create'/'delete' commands
-    # Just as an example; adjust to your needs
+    # Insert --dry-run=client -o yaml if subcommand is create/delete
     if len(tokens) >= 2 and tokens[1] in ["create", "delete"]:
         if not any(t.startswith("--dry-run") for t in tokens):
             tokens.insert(2, "--dry-run=client")
-        if not any(t in ["-o", "--output"] for t in tokens):
+        if not any(t == "-o" or t.startswith("--output") for t in tokens):
             tokens.insert(3, "-o")
             tokens.insert(4, "yaml")
 
@@ -637,9 +644,7 @@ def syntax_check_kubectl(cmd: str, timeout_secs: int = 2) -> bool:
             return False
         # If success => presumably okay
         return True
-
     except subprocess.TimeoutExpired:
-        # Timed out => treat it as "syntax is correct enough"
         print("[INFO] Command timed out, assuming syntax is correct enough.\n")
         return True
     except FileNotFoundError:
@@ -653,12 +658,12 @@ def syntax_check_kubectl(cmd: str, timeout_secs: int = 2) -> bool:
 def get_user_commands_with_syntax_check() -> list:
     """
     Prompt the user for multiple commands (one per line).
-    - If line has `--help`, run it immediately (no storing).
-    - Otherwise, do the short-timeout dry-run check.
-    - If there's a syntax error, let the user retry or skip.
-    - Press Enter on a blank line to finalize.
+      - If line has `--help`, run it immediately (no storing).
+      - Otherwise, do a short-timeout `syntax_check_kubectl`.
+      - If there's a syntax error, ask if the user wants to re-enter or skip.
+      - Press Enter on a blank line to finalize.
 
-    Return a list of validated commands (that pass the syntax check or user chooses to skip).
+    Return a list of validated commands (which pass the syntax check or user chooses to keep anyway).
     """
     validated_commands = []
     print(
@@ -671,47 +676,120 @@ def get_user_commands_with_syntax_check() -> list:
             # blank line => done
             break
 
-        # Normalize 'k' => 'kubectl'
         line = canonicalize_kubectl(line)
 
-        # If user typed a help command:
-        # e.g. 'kubectl drain --help', 'kubectl create clusterrole --help', etc.
         if "--help" in line:
-            # Just run it directly, don't store it
+            # Just run the help command, don't store it
             run_help_command(line)
             continue
 
-        # Syntax check with short timeout
         is_ok = syntax_check_kubectl(line)
         if not is_ok:
             print("It seems there's a syntax or usage error.\n")
             retry = input("Would you like to re-enter this command? (y/n) ").lower()
             if retry.startswith("y"):
-                continue  # let them retype
+                continue  # let them retype the command
             else:
-                # user chooses to keep it anyway
+                # user chooses to keep it anyway, even if it's broken
                 validated_commands.append(line)
         else:
-            # Syntax is presumably correct
+            # syntax is presumably correct
             validated_commands.append(line)
 
     return validated_commands
 
 
+def check_against_checklist(final_answer: str, checklist: list):
+    """
+    Compare the user's final answer (a big string of lines) against the question's checklist.
+    Return (found, missing).
+    We do naive substring matching, case-insensitive.
+    """
+    found = []
+    missing = []
+    user_lower = final_answer.lower()
+
+    for item in checklist:
+        if item.lower() in user_lower:
+            found.append(item)
+        else:
+            missing.append(item)
+
+    return found, missing
+
+
+def special_mock_output_q10(user_answer: str):
+    """
+    For Q10 specifically, if the user forgot certain pipes or flags,
+    show partial output or mention what's missing.
+    E.g., if they forgot 'grep -i ready' or 'grep -i noSchedule'.
+    """
+    user_lower = user_answer.lower()
+
+    # Simple checks:
+    if "kubectl get nodes" in user_lower and "grep -i ready" not in user_lower:
+        print("[MOCK] You forgot to pipe to 'grep -i ready'. Output might be:\n")
+        print("NAME             STATUS     ROLES    AGE   VERSION")
+        print("k8s-master       Ready      master   33d   v1.19.0")
+        print("wk8s-node-0      NotReady   <none>   30d   v1.19.0")
+        print("wk8s-node-1      Ready      <none>   29d   v1.19.0")
+        print("wk8s-node-2      Ready      <none>   14d   v1.19.0")
+        print("(That includes NotReady nodes, too.)\n")
+
+    if (
+        "kubectl describe nodes" in user_lower
+        and "grep -i noschedule" not in user_lower
+    ):
+        print("[MOCK] You forgot to filter 'noSchedule'. Taints might be:\n")
+        print("Taints: key=example:NoSchedule")
+        print("        key=some-other:NoExecute\n")
+
+
+################################################################################
+# Main Program
+################################################################################
+
+
 def main():
     print("Welcome to the K8s Mock Exam with Syntax Checking & Real `--help`!\n")
 
-    # EXAMPLE: We only have one question for demonstration
-    print("Question 1:\n1) Cordon a node, then drain another node.\n")
+    # Loop over each question in Q_AND_A
+    for i, qa in enumerate(Q_AND_A, start=1):
+        print(f"Question {i}:")
+        print(qa["question"])  # Show the question text
+        # Gather the user's multi-line commands for this question
+        user_cmds = get_user_commands_with_syntax_check()
 
-    commands = get_user_commands_with_syntax_check()
-    print("\n=== Final Commands Entered ===")
-    for c in commands:
-        print(c)
+        # Combine them into one string for checking
+        final_answer_str = "\n".join(user_cmds)
 
-    print(
-        "\nDone. You can now compare to the official answer, do your checklist, etc.\n"
-    )
+        # 1) Check if the user is missing any checklist items
+        print("\n=== Checking Your Answer ===")
+        found, missing = check_against_checklist(final_answer_str, qa["checklist"])
+        if missing:
+            print("You might be missing the following key parts:")
+            for m in missing:
+                print(f"  - {m}")
+        else:
+            print("It looks like you included all key parts we expect!")
+
+        # 2) If there's special handling (like Q10 partial mocks), run it
+        if qa.get("special_handling") == "q10":
+            special_mock_output_q10(final_answer_str)
+
+        # 3) Show the official reference answer
+        print("\n--- Reference Answer (for comparison) ---")
+        print(qa["reference"])
+
+        # 4) Show any notes
+        if qa.get("notes"):
+            print("\nNotes:")
+            for note in qa["notes"]:
+                print(f"  - {note}")
+
+        print("-" * 70, "\n")
+
+    print("All questions done! Good luck with your Kubernetes journey.\n")
 
 
 if __name__ == "__main__":
