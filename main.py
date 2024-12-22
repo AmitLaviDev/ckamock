@@ -72,7 +72,7 @@ Q_AND_A = [
     {
         "question": textwrap.dedent(
             """\
-            3) Upgrade an existing cluster (v1.18.8) to v1.19.0 on the master node with name ek8s-master:
+            3) Upgrade an existing cluster (v1.18.8) to v1.19.0 on the master node with name k8s-master:
                - Upgrade all control plane and node components on the master
                - Upgrade kubelet and kubectl on the master node
         """
