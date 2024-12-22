@@ -580,79 +580,104 @@ Q_AND_A = [
 ]
 
 
-def canonicalize_kubectl(user_answer: str) -> str:
+def canonicalize_kubectl(user_cmd: str) -> str:
     """
-    Replace standalone 'k' with 'kubectl'.
-    E.g. "k get pods" -> "kubectl get pods"
+    Convert standalone 'k' to 'kubectl'.
     """
-    return re.sub(r"\bk\b", "kubectl", user_answer)
+    return re.sub(r"\bk\b", "kubectl", user_cmd)
 
 
-def run_kubectl_command(command: str) -> None:
+def syntax_check_kubectl(cmd: str) -> bool:
     """
-    Runs the given command in a subprocess and prints output/err.
+    Attempt to detect syntax errors using actual 'kubectl'.
+    We run the command with subprocess and see if it returns an error code.
+
+    Return True if syntax is valid (exit code 0),
+    Return False if there's an error.
     """
-    tokens = command.split()
-    print(f"\n[Running command]: {command}\n{'-'*40}")
+    # We'll do a naive attempt to add '--dry-run=client' if the command is a 'create' or 'delete'.
+    # But note that not all commands or versions support --dry-run=client.
+    # If you'd rather always run the exact command, remove these lines.
+    # Also, we only do this for 'create' or 'delete' subcommands.
+
+    tokens = cmd.strip().split()
+    if len(tokens) >= 2:
+        subcommand = tokens[1]
+        # If it's 'create' or 'delete', try to insert '--dry-run=client' to avoid real changes
+        if subcommand in ["create", "delete"]:
+            # If it doesn't already have a --dry-run=...
+            if not any(t.startswith("--dry-run") for t in tokens):
+                tokens.insert(2, "--dry-run=client")  # insert after 'kubectl' 'create'
+    # Actually run the command
+    print(f"\n[Syntax-checking]: {' '.join(tokens)}")
     try:
-        result = subprocess.run(tokens, capture_output=True, text=True, check=False)
-        if result.stdout:
-            print("STDOUT:")
-            print(result.stdout)
-        if result.stderr:
-            print("STDERR:")
-            print(result.stderr)
+        result = subprocess.run(tokens, capture_output=True, text=True)
         if result.returncode != 0:
-            print(f"[ERROR] Command exited with code {result.returncode}")
+            print("STDOUT:\n" + (result.stdout or ""))
+            print("STDERR:\n" + (result.stderr or ""))
+            print(f"[ERROR] Command exited with code {result.returncode}\n")
+            return False
+        else:
+            # Success or no error code
+            return True
     except FileNotFoundError:
-        print("[ERROR] 'kubectl' not found. Is it installed and in PATH?")
+        print("[ERROR] 'kubectl' not found. Is it installed?\n")
+        return False
     except Exception as e:
-        print(f"[ERROR] Unexpected error: {e}")
-    print("-" * 40, "\n")
+        print(f"[ERROR] Unexpected error: {e}\n")
+        return False
 
 
-def prompt_user_commands() -> str:
+def get_user_commands_with_syntax_check() -> list:
     """
-    Reads multiple lines of user input. If a line includes '--help', we immediately
-    run it through 'kubectl' (after alias expansion). Otherwise, we store it.
-    Pressing Enter on a blank line ends input and returns the combined lines
-    (excluding lines that had --help).
+    Prompt the user for multiple commands (one per line).
+    For each command:
+      1) canonicalize 'k' -> 'kubectl'
+      2) run syntax_check_kubectl
+      3) if syntax_check fails, ask user if they want to re-enter
+      4) else store it
+    Press Enter on blank line to finalize.
+
+    Return a list of validated commands.
     """
+    validated_commands = []
     print(
-        "Type your commands, one per line. If you need help, type '--help' anywhere in the line."
+        "Enter your commands below (one per line). Press Enter on a blank line to finish.\n"
     )
-    print("Press Enter on an empty line to finalize your answer.\n")
-
-    stored_lines = []
 
     while True:
-        line = input("> ")
-        if not line.strip():
-            # Blank line => done
+        line = input("> ").strip()
+        if not line:
+            # blank line => done
             break
 
-        # Convert 'k' -> 'kubectl'
-        line_normalized = canonicalize_kubectl(line)
+        line = canonicalize_kubectl(line)
 
-        # If user typed any line with '--help', let's run that command right now.
-        if "--help" in line_normalized:
-            run_kubectl_command(line_normalized)
-            # We'll *not* store this line as part of the final answer,
-            # because it's presumably just a help lookup.
-            continue
+        # Attempt to syntax-check the command
+        is_ok = syntax_check_kubectl(line)
+        if not is_ok:
+            # Syntax check failed
+            print("It seems there's a syntax or usage error.\n")
+            retry = input("Would you like to re-enter this command? (y/n) ").lower()
+            if retry.startswith("y"):
+                # Let the user try again
+                continue
+            else:
+                # Keep the command anyway, even if it's broken
+                validated_commands.append(line)
         else:
-            stored_lines.append(line_normalized)
+            # If syntax is good or we didn't do a dry-run
+            validated_commands.append(line)
 
-    # Return the combined lines as the user's "final" answer
-    return "\n".join(stored_lines)
+    return validated_commands
 
 
-def check_against_checklist(user_answer: str, checklist: list):
+def check_against_checklist(final_answer: str, checklist: list):
     """
-    Basic approach: for each item in 'checklist', check if it's in user_answer (case-insensitive).
-    Return (found_items, missing_items).
+    Compare final_answer (combined text) against the question's checklist.
+    Return (found, missing).
     """
-    user_lower = user_answer.lower()
+    user_lower = final_answer.lower()
     found = []
     missing = []
     for item in checklist:
@@ -663,42 +688,41 @@ def check_against_checklist(user_answer: str, checklist: list):
     return found, missing
 
 
-################################################################################
-# Main
-################################################################################
-
-
 def main():
-    print("=== Welcome to the K8s Mock Exam (with real 'help' integration) ===\n")
+    print("Welcome to the K8s Mock Exam with Syntax Checking!\n")
 
     for i, qa in enumerate(Q_AND_A, start=1):
         print(f"Question {i}:\n{qa['question']}")
 
-        # Prompt for multi-line input, allowing 'help' calls
-        user_answer = prompt_user_commands()
+        # Let the user type multiple commands, each validated
+        validated_cmds = get_user_commands_with_syntax_check()
 
-        # Evaluate final answer (everything except help lines) vs checklist
-        print("\n=== Checking Your Answer ===\n")
-        found, missing = check_against_checklist(user_answer, qa["checklist"])
+        # Combine them into one string to compare against the checklist
+        final_answer_str = "\n".join(validated_cmds)
+
+        print("\n=== Checking Your Answer Against the Checklist ===")
+        found, missing = check_against_checklist(final_answer_str, qa["checklist"])
+
         if missing:
-            print("You might be missing these key parts:")
+            print("You might be missing the following key parts:")
             for m in missing:
                 print(f"  - {m}")
         else:
-            print("It looks like you included all key parts we expect!")
+            print("It looks like you included all the key parts we expect!")
 
-        # Show reference
+        # Show the official reference
         print("\n--- Reference Answer (for comparison) ---")
         print(qa["reference"])
 
+        # Show notes, if any
         if qa.get("notes"):
             print("\nNotes:")
             for note in qa["notes"]:
-                print(f"  - {note}")
+                print("  -", note)
 
-        print("-" * 70, "\n")
+        print("=" * 70 + "\n")
 
-    print("End of the Mock Exam. Good luck with your Kubernetes adventures!")
+    print("All questions done! Good luck with your Kubernetes journey.")
 
 
 if __name__ == "__main__":
