@@ -580,22 +580,43 @@ Q_AND_A = [
 ]
 
 
-def canonicalize_kubectl(user_cmd: str) -> str:
-    """
-    Convert standalone 'k' to 'kubectl'.
-    """
-    return re.sub(r"\bk\b", "kubectl", user_cmd)
+def canonicalize_kubectl(cmd: str) -> str:
+    """Replace standalone 'k' with 'kubectl'."""
+    return re.sub(r"\bk\b", "kubectl", cmd)
 
 
-def syntax_check_kubectl(cmd: str) -> bool:
+def run_help_command(cmd: str):
     """
-    Run `kubectl` with a small timeout. If it fails quickly => syntax error.
-    If it times out => assume syntax is correct enough and proceed.
+    Directly run `kubectl ... --help` with no timeout,
+    show its output, but don't store it in the final answer.
+    """
+    tokens = cmd.strip().split()
+    print(f"\n[Running help command]: {cmd}\n{'-'*40}")
+    try:
+        result = subprocess.run(tokens, capture_output=True, text=True)
+        if result.stdout:
+            print("STDOUT:")
+            print(result.stdout)
+        if result.stderr:
+            print("STDERR:")
+            print(result.stderr)
+        print(f"Exit code: {result.returncode}\n{'-'*40}\n")
+    except FileNotFoundError:
+        print("[ERROR] 'kubectl' not found or not in PATH.\n")
+    except Exception as e:
+        print(f"[ERROR] Unexpected error: {e}\n")
+
+
+def syntax_check_kubectl(cmd: str, timeout_secs: int = 2) -> bool:
+    """
+    Attempts to run the command in a short timeout, so we can catch quick syntax errors.
+    If it times out => assume syntax is correct (to avoid blocking).
+    If it returns an error => syntax is incorrect.
     """
     tokens = cmd.strip().split()
 
-    # Example: Insert --dry-run=client and -o yaml for subcommands create|delete
-    # (optional)
+    # Attempt to insert --dry-run=client and -o yaml for 'create'/'delete' commands
+    # Just as an example; adjust to your needs
     if len(tokens) >= 2 and tokens[1] in ["create", "delete"]:
         if not any(t.startswith("--dry-run") for t in tokens):
             tokens.insert(2, "--dry-run=client")
@@ -605,44 +626,39 @@ def syntax_check_kubectl(cmd: str) -> bool:
 
     print(f"\n[Syntax-checking]: {' '.join(tokens)}")
     try:
-        result = subprocess.run(tokens, capture_output=True, text=True, timeout=2)
-        # 2-second timeout is arbitrary. Adjust as you like.
-
+        result = subprocess.run(
+            tokens, capture_output=True, text=True, timeout=timeout_secs
+        )
         if result.returncode != 0:
-            # Non-zero => real error
-            print("STDOUT:\n" + (result.stdout or ""))
-            print("STDERR:\n" + (result.stderr or ""))
+            # Non-zero => actual error
+            print("STDOUT:\n", result.stdout)
+            print("STDERR:\n", result.stderr)
             print(f"[ERROR] Command exited with code {result.returncode}\n")
             return False
-        else:
-            # Success within 2 seconds => syntax is presumably good
-            return True
-
-    except subprocess.TimeoutExpired:
-        # Timed out => we assume it's "correct" (or at least not obviously wrong).
-        print("[INFO] Command timed out, assuming syntax is correct enough.\n")
+        # If success => presumably okay
         return True
 
+    except subprocess.TimeoutExpired:
+        # Timed out => treat it as "syntax is correct enough"
+        print("[INFO] Command timed out, assuming syntax is correct enough.\n")
+        return True
     except FileNotFoundError:
-        print("[ERROR] 'kubectl' is not installed or not in PATH.")
+        print("[ERROR] 'kubectl' not found.\n")
         return False
-
     except Exception as e:
-        print(f"[ERROR] Unexpected error: {e}")
+        print(f"[ERROR] Unexpected error: {e}\n")
         return False
 
 
 def get_user_commands_with_syntax_check() -> list:
     """
     Prompt the user for multiple commands (one per line).
-    For each command:
-      1) canonicalize 'k' -> 'kubectl'
-      2) run syntax_check_kubectl
-      3) if syntax_check fails, ask user if they want to re-enter
-      4) else store it
-    Press Enter on blank line to finalize.
+    - If line has `--help`, run it immediately (no storing).
+    - Otherwise, do the short-timeout dry-run check.
+    - If there's a syntax error, let the user retry or skip.
+    - Press Enter on a blank line to finalize.
 
-    Return a list of validated commands.
+    Return a list of validated commands (that pass the syntax check or user chooses to skip).
     """
     validated_commands = []
     print(
@@ -655,78 +671,47 @@ def get_user_commands_with_syntax_check() -> list:
             # blank line => done
             break
 
+        # Normalize 'k' => 'kubectl'
         line = canonicalize_kubectl(line)
 
-        # Attempt to syntax-check the command
+        # If user typed a help command:
+        # e.g. 'kubectl drain --help', 'kubectl create clusterrole --help', etc.
+        if "--help" in line:
+            # Just run it directly, don't store it
+            run_help_command(line)
+            continue
+
+        # Syntax check with short timeout
         is_ok = syntax_check_kubectl(line)
         if not is_ok:
-            # Syntax check failed
             print("It seems there's a syntax or usage error.\n")
             retry = input("Would you like to re-enter this command? (y/n) ").lower()
             if retry.startswith("y"):
-                # Let the user try again
-                continue
+                continue  # let them retype
             else:
-                # Keep the command anyway, even if it's broken
+                # user chooses to keep it anyway
                 validated_commands.append(line)
         else:
-            # If syntax is good or we didn't do a dry-run
+            # Syntax is presumably correct
             validated_commands.append(line)
 
     return validated_commands
 
 
-def check_against_checklist(final_answer: str, checklist: list):
-    """
-    Compare final_answer (combined text) against the question's checklist.
-    Return (found, missing).
-    """
-    user_lower = final_answer.lower()
-    found = []
-    missing = []
-    for item in checklist:
-        if item.lower() in user_lower:
-            found.append(item)
-        else:
-            missing.append(item)
-    return found, missing
-
-
 def main():
-    print("Welcome to the K8s Mock Exam with Syntax Checking!\n")
+    print("Welcome to the K8s Mock Exam with Syntax Checking & Real `--help`!\n")
 
-    for i, qa in enumerate(Q_AND_A, start=1):
-        print(f"Question {i}:\n{qa['question']}")
+    # EXAMPLE: We only have one question for demonstration
+    print("Question 1:\n1) Cordon a node, then drain another node.\n")
 
-        # Let the user type multiple commands, each validated
-        validated_cmds = get_user_commands_with_syntax_check()
+    commands = get_user_commands_with_syntax_check()
+    print("\n=== Final Commands Entered ===")
+    for c in commands:
+        print(c)
 
-        # Combine them into one string to compare against the checklist
-        final_answer_str = "\n".join(validated_cmds)
-
-        print("\n=== Checking Your Answer Against the Checklist ===")
-        found, missing = check_against_checklist(final_answer_str, qa["checklist"])
-
-        if missing:
-            print("You might be missing the following key parts:")
-            for m in missing:
-                print(f"  - {m}")
-        else:
-            print("It looks like you included all the key parts we expect!")
-
-        # Show the official reference
-        print("\n--- Reference Answer (for comparison) ---")
-        print(qa["reference"])
-
-        # Show notes, if any
-        if qa.get("notes"):
-            print("\nNotes:")
-            for note in qa["notes"]:
-                print("  -", note)
-
-        print("=" * 70 + "\n")
-
-    print("All questions done! Good luck with your Kubernetes journey.")
+    print(
+        "\nDone. You can now compare to the official answer, do your checklist, etc.\n"
+    )
 
 
 if __name__ == "__main__":
