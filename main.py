@@ -56,13 +56,13 @@ Q_AND_A = [
         "reference": textwrap.dedent(
             """\
             kubectl cordon ek8s-node-1
-            kubectl drain ek8s-node-1 --delete-local-data --ignore-daemonsets --force
+            kubectl drain ek8s-node-1 --delete-emptydir-data --ignore-daemonsets --force
         """
         ),
         "checklist": [
             "kubectl cordon ek8s-node-1",
             "kubectl drain ek8s-node-1",
-            "--delete-local-data",
+            "--delete-emptydir-data",
             "--ignore-daemonsets",
             "--force",
         ],
@@ -72,7 +72,7 @@ Q_AND_A = [
     {
         "question": textwrap.dedent(
             """\
-            3) Upgrade an existing cluster (v1.18.8) to v1.19.0 on the master node:
+            3) Upgrade an existing cluster (v1.18.8) to v1.19.0 on the master node with name ek8s-master:
                - Upgrade all control plane and node components on the master
                - Upgrade kubelet and kubectl on the master node
         """
@@ -80,7 +80,7 @@ Q_AND_A = [
         "reference": textwrap.dedent(
             """\
             kubectl cordon k8s-master
-            kubectl drain k8s-master --delete-local-data --ignore-daemonsets --force
+            kubectl drain k8s-master --delete-emptydir-data --ignore-daemonsets --force
 
             apt-get install kubeadm=1.19.0-00 kubelet=1.19.0-00 kubectl=1.19.0-00 --disableexcludes=kubernetes
             kubeadm upgrade apply 1.19.0 --etcd-upgrade=false
