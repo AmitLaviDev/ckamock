@@ -184,15 +184,24 @@ def special_mock_output_q10(user_answer: str):
     """
     user_lower = user_answer.lower()
 
+    # Handle 'kubectl get nodes' without any filters
+    if "kubectl get nodes" in user_lower and "|" not in user_lower:
+        print(
+            "[MOCK OUTPUT] You might be missing pipes or filters. Example raw output:\n"
+        )
+        print("NAME         STATUS     ROLES    AGE   VERSION")
+        print("k8s-master   Ready      master   12d   v1.19.0")
+        print("wk8s-node-0  NotReady   <none>   11d   v1.19.0\n")
+
     # Missing 'grep -i ready'
-    if "kubectl get nodes" in user_lower and "grep -i ready" not in user_lower:
+    elif "kubectl get nodes" in user_lower and "grep -i ready" not in user_lower:
         print("[MOCK OUTPUT] Missing '| grep -i ready'. Example output:\n")
         print("NAME         STATUS     ROLES    AGE   VERSION")
         print("k8s-master   Ready      master   12d   v1.19.0")
         print("wk8s-node-0  NotReady   <none>   11d   v1.19.0\n")
 
     # Missing 'grep -i noschedule'
-    if (
+    elif (
         "kubectl describe nodes" in user_lower
         and "grep -i noschedule" not in user_lower
     ):
