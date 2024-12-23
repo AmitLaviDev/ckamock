@@ -72,36 +72,40 @@ def run_help_command(cmd: str):
         print(f"[ERROR] {e}")
 
 
-def syntax_check_cli(cmd: str, timeout_secs: int = 1) -> bool:
+def syntax_check_cli(cmd: str, timeout_secs: int = 2) -> bool:
     """
-    Simplified syntax check for CLI commands (kubectl, kubeadm, bash).
-    Shows only the command, error, and help suggestion.
+    Perform syntax checks for CLI commands, with exclusions for specific commands like etcdctl.
     """
     tokens = cmd.strip().split()
-
-    # Add dry-run and output flags for 'kubectl create|delete'
     lower_cmd = cmd.lower()
-    if lower_cmd.startswith("kubectl "):
-        if len(tokens) >= 2 and tokens[1] in ["create", "delete"]:
-            if not any(t.startswith("--dry-run") for t in tokens):
-                tokens.insert(2, "--dry-run=client")
-            if not any(t == "-o" or t.startswith("--output") for t in tokens):
-                tokens.insert(3, "-o")
-                tokens.insert(4, "yaml")
 
-    print(f"[Syntax-checking]: {' '.join(tokens)}")
+    # Skip syntax check for etcdctl commands
+    if "etcdctl" in lower_cmd:
+        print("[INFO] Skipping syntax check for etcdctl commands.\n")
+        return True
 
+    # Custom check for apt-get
+    if lower_cmd.startswith("apt-get "):
+        if "update" in lower_cmd and any("=" in token for token in tokens):
+            print(
+                "[ERROR] 'apt-get update' does not accept packages or versions. Use 'apt-get install'."
+            )
+            return False
+        if "--disableexcludes" in lower_cmd:
+            print(
+                "[ERROR] '--disableexcludes' is not valid for apt-get. Use 'yum' or 'dnf'."
+            )
+            return False
+
+    # Default syntax check for kubectl, kubeadm, and systemctl
     try:
         result = subprocess.run(
             tokens, capture_output=True, text=True, timeout=timeout_secs
         )
-
-        # If error, show just error message and helper suggestion
         if result.returncode != 0:
-            print(result.stderr.strip())  # Show only the error
-            return False  # Syntax/usage error
-        return True  # No error
-
+            print(result.stderr.strip())  # Simplified error output
+            return False
+        return True
     except subprocess.TimeoutExpired:
         print("[INFO] Command timed out, assuming syntax is correct enough.")
         return True

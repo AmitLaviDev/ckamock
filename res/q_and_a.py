@@ -105,7 +105,13 @@ Q_AND_A = [
 
                Restore from /var/lib/backup/etcd-snapshot-previous.db
 
-               TLS cert/key in /opt/KUIN00601/...
+               The following TLS certificates/key are supplied for connecting to the server with etcdctl:
+
+               CA certificate: /opt/KUIN00601/ca.crt
+               
+               Client certificate: /opt/KUIN00601/etcd-client.crt 
+               
+               Clientkey:/opt/KUIN00601/etcd-client.key
         """
         ),
         "reference": textwrap.dedent(
