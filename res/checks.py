@@ -72,7 +72,7 @@ def run_help_command(cmd: str):
         print(f"[ERROR] {e}")
 
 
-def syntax_check_cli(cmd: str, timeout_secs: int = 2) -> bool:
+def syntax_check_cli(cmd: str, timeout_secs: int = 1) -> bool:
     """
     Simplified syntax check for CLI commands (kubectl, kubeadm, bash).
     Shows only the command, error, and help suggestion.
