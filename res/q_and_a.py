@@ -317,7 +317,7 @@ Q_AND_A = [
         "reference": textwrap.dedent(
             """\
             kubectl get nodes | grep -i ready
-            kubectl describe nodes <nodeName> | grep -i taints | grep -i noSchedule
+            kubectl describe nodes k8s-master | grep -i taints | grep -i noSchedule
             # Subtract the noSchedule nodes from the total ready nodes, then:
             echo <someNumber> > /opt/nodenum
         """
@@ -446,7 +446,7 @@ Q_AND_A = [
                   claimName: pv-volume
 
             # Then:
-            kubectl edit pvc pv-volume --save-config  # expand to 70Mi
+            kubectl edit pvc pv-volume --record  # expand to 70Mi
         """
         ),
         "checklist": [
