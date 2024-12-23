@@ -14,7 +14,7 @@ A mock exam tool to practice Kubernetes tasks (RBAC, node drain, upgrades) with 
 ## Features
 
 - **Multi-Question Exam**: 17 tasks covering Kubernetes scenarios
-- **Kubectl Common Aliases**: Support known aliases (k->kubectl, sa->serviceaccount, etc)
+- **Command Aliases**: Supports shorthand aliases for commands (e.g., `k` → `kubectl`, `sa` → `serviceaccount`).
 - **Syntax Validation**: Short timeout checks for valid flags and arguments  
 - **Help Support**: Use commands like `kubectl create --help` to check usage  
 - **Error Handling**: Displays real errors if commands fail validation  
