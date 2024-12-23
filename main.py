@@ -23,16 +23,26 @@ def main():
         "set editing-mode emacs"
     )  # Default line editing (bash-like)
 
-    print("Welcome to the K8s Mock Exam with syntax check for kubectl & kubeadm!\n")
+    print(
+        "Welcome to the K8s Mock Exam with syntax check for kubectl, kubeadm, and bash!"
+    )
+    print(
+        "Type commands one at a time. Press Enter on a blank line to finish each question."
+    )
 
     for i, qa in enumerate(Q_AND_A, start=1):
-        print(f"Question {i}:")
+        print(f"\nQuestion {i}:")
         print(qa["question"])
 
-        user_cmds = get_user_commands_with_syntax_check()
+        # Handle commands for this question (with immediate feedback if needed)
+        user_cmds = get_user_commands_with_syntax_check(
+            question_id=qa.get("special_handling")
+        )
         final_answer = "\n".join(user_cmds)
 
         print("\n=== Checking Your Answer ===")
+
+        # Compare the user's answers against expected checklist
         found, missing = check_against_checklist(final_answer, qa["checklist"])
         if missing:
             print("You might be missing these key parts:")
@@ -41,10 +51,11 @@ def main():
         else:
             print("Looks like you included all the key parts we expect!")
 
-        # If question has special handling (like Q10), run it
+        # Handle special cases, e.g., Q10 (mock outputs for missing pipes/filters)
         if qa.get("special_handling") == "q10":
             special_mock_output_q10(final_answer)
 
+        # Display reference answer for comparison
         print("\n--- Reference Answer (for comparison) ---")
         print(qa["reference"])
 
@@ -54,6 +65,7 @@ def main():
                 print(f"  - {note}")
 
         print("-" * 70, "\n")
+
     print("All questions done! Good luck with your Kubernetes journey.\n")
 
 

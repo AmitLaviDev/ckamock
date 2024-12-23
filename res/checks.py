@@ -74,54 +74,77 @@ def run_help_command(cmd: str):
 
 def syntax_check_cli(cmd: str, timeout_secs: int = 2) -> bool:
     """
-    Perform syntax checks for CLI commands, with exclusions for specific commands like etcdctl.
+    Syntax-check commands for kubectl, kubeadm, and bash-like commands.
+    Handles pipes and redirects by enabling shell execution.
     """
+    # Check if the command includes pipes or redirects
+    if "|" in cmd or ">" in cmd:
+        # Shell execution to support pipes and redirections
+        print(f"[Shell Execution]: {cmd}")
+        try:
+            result = subprocess.run(
+                cmd, shell=True, capture_output=True, text=True, timeout=timeout_secs
+            )
+            # Print captured output for visibility
+            if result.stdout:
+                print(result.stdout.strip())
+            if result.stderr:
+                print(result.stderr.strip())
+
+            # Check for errors
+            if result.returncode != 0:
+                return False
+            return True
+        except subprocess.TimeoutExpired:
+            print("[INFO] Command timed out, assuming syntax is correct enough.\n")
+            return True
+        except FileNotFoundError:
+            print("[ERROR] Command not found.\n")
+            return False
+        except Exception as e:
+            print(f"[ERROR] Unexpected error: {e}\n")
+            return False
+
+    # Continue normal processing for non-shell commands
     tokens = cmd.strip().split()
     lower_cmd = cmd.lower()
 
-    # Skip syntax check for etcdctl commands
-    if "etcdctl" in lower_cmd:
-        print("[INFO] Skipping syntax check for etcdctl commands.\n")
-        return True
+    # Insert --dry-run=client and -o yaml for 'create' or 'delete'
+    if lower_cmd.startswith("kubectl "):
+        if len(tokens) >= 2 and tokens[1] in ["create", "delete"]:
+            if not any(t.startswith("--dry-run") for t in tokens):
+                tokens.insert(2, "--dry-run=client")
+            if not any(t == "-o" or t.startswith("--output") for t in tokens):
+                tokens.insert(3, "-o")
+                tokens.insert(4, "yaml")
 
-    # Custom check for apt-get
-    if lower_cmd.startswith("apt-get "):
-        if "update" in lower_cmd and any("=" in token for token in tokens):
-            print(
-                "[ERROR] 'apt-get update' does not accept packages or versions. Use 'apt-get install'."
-            )
-            return False
-        if "--disableexcludes" in lower_cmd:
-            print(
-                "[ERROR] '--disableexcludes' is not valid for apt-get. Use 'yum' or 'dnf'."
-            )
-            return False
-
-    # Default syntax check for kubectl, kubeadm, and systemctl
+    print(f"[Syntax-checking]: {' '.join(tokens)}")
     try:
         result = subprocess.run(
             tokens, capture_output=True, text=True, timeout=timeout_secs
         )
         if result.returncode != 0:
-            print(result.stderr.strip())  # Simplified error output
+            print(result.stderr.strip())
             return False
         return True
     except subprocess.TimeoutExpired:
-        print("[INFO] Command timed out, assuming syntax is correct enough.")
+        print("[INFO] Command timed out, assuming syntax is correct enough.\n")
         return True
     except FileNotFoundError:
-        print("[ERROR] Command not found.")
+        print("[ERROR] Command not found.\n")
         return False
     except Exception as e:
-        print(f"[ERROR] {e}")
+        print(f"[ERROR] Unexpected error: {e}\n")
         return False
 
 
-def get_user_commands_with_syntax_check() -> list:
+def get_user_commands_with_syntax_check(question_id=None) -> list:
     """
     Prompt user for multiple commands (one per line). Press Enter on blank line to finish.
-      - Supports aliases and shortcuts.
-      - Syntax checks for 'kubectl', 'kubeadm', and 'bash' commands.
+    - If line has `--help`, run it immediately, skip storing.
+    - For kubectl/kubeadm/bash commands, do syntax check.
+    - Handle special cases (e.g., Q10 mock output).
+    Return list of validated commands.
     """
     validated_commands = []
     print(
@@ -130,32 +153,39 @@ def get_user_commands_with_syntax_check() -> list:
 
     while True:
         line = input("> ").strip()
-        if not line:
-            break  # Exit on blank line
+        if not line:  # blank line => done
+            break
 
-        # Replace aliases and normalize 'k' to 'kubectl'
+        # Normalize 'k' => 'kubectl'
         line = canonicalize_kubectl(line)
 
-        # Handle '--help'
+        # Handle Q10 mock output immediately if needed
+        if question_id == "q10":
+            special_mock_output_q10(line)
+
+        # Handle help commands
         if "--help" in line:
             run_help_command(line)
             continue
 
-        # Perform syntax check only for supported CLI commands
+        # Skip syntax checks for etcdctl commands
+        if line.startswith("ETCDCTL_API="):
+            validated_commands.append(line)
+            continue
+
+        # Syntax check for supported CLI commands
         lower_line = line.lower()
-        if (
-            lower_line.startswith("kubectl ")
-            or lower_line.startswith("kubeadm ")
-            or lower_line.startswith("apt-get ")
-            or lower_line.startswith("systemctl ")
-        ):
+        if lower_line.startswith(("kubectl", "kubeadm", "apt-get", "systemctl")):
             is_ok = syntax_check_cli(line)
             if not is_ok:
+                print("It seems there's a syntax or usage error.\n")
                 retry = input("Would you like to re-enter this command? (y/n) ").lower()
                 if retry.startswith("y"):
                     continue
-        # Add to validated commands
-        validated_commands.append(line)
+            validated_commands.append(line)
+        else:
+            # Accept other commands without checks
+            validated_commands.append(line)
 
     return validated_commands
 
@@ -184,8 +214,11 @@ def special_mock_output_q10(user_answer: str):
     """
     user_lower = user_answer.lower()
 
-    # Handle 'kubectl get nodes' without any filters
-    if "kubectl get nodes" in user_lower and "|" not in user_lower:
+    # Detect piping behavior and split commands
+    commands = [cmd.strip() for cmd in user_answer.split("|")]
+
+    # Handle raw 'kubectl get nodes' without pipes
+    if "kubectl get nodes" in commands[0] and len(commands) == 1:
         print(
             "[MOCK OUTPUT] You might be missing pipes or filters. Example raw output:\n"
         )
@@ -193,16 +226,22 @@ def special_mock_output_q10(user_answer: str):
         print("k8s-master   Ready      master   12d   v1.19.0")
         print("wk8s-node-0  NotReady   <none>   11d   v1.19.0\n")
 
-    # Missing 'grep -i ready'
-    elif "kubectl get nodes" in user_lower and "grep -i ready" not in user_lower:
+    # Handle pipe with 'grep -i ready'
+    elif len(commands) > 1 and "grep -i ready" in commands[1]:
+        print("[MOCK OUTPUT] Example filtered output:\n")
+        print("NAME         STATUS     ROLES    AGE   VERSION")
+        print("k8s-master   Ready      master   12d   v1.19.0\n")
+
+    # Missing 'grep -i ready' but has 'kubectl get nodes'
+    elif "kubectl get nodes" in commands[0] and "grep -i ready" not in user_lower:
         print("[MOCK OUTPUT] Missing '| grep -i ready'. Example output:\n")
         print("NAME         STATUS     ROLES    AGE   VERSION")
         print("k8s-master   Ready      master   12d   v1.19.0")
         print("wk8s-node-0  NotReady   <none>   11d   v1.19.0\n")
 
-    # Missing 'grep -i noschedule'
+    # Missing 'grep -i noschedule' after describing nodes
     elif (
-        "kubectl describe nodes" in user_lower
+        "kubectl describe nodes" in commands[0]
         and "grep -i noschedule" not in user_lower
     ):
         print("[MOCK OUTPUT] Missing '| grep -i noSchedule'. Example taints:\n")
