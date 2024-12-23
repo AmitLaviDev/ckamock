@@ -1,6 +1,28 @@
 from res import *
+import readline
+import os
+import atexit
+
 
 def main():
+    # Enable persistent command history across runs
+    history_file = os.path.expanduser("~/.k8s_mock_exam_history")
+
+    # Load history if the file exists
+    try:
+        readline.read_history_file(history_file)
+    except FileNotFoundError:
+        pass  # No history file yet, ignore error
+
+    # Save history on exit
+    atexit.register(readline.write_history_file, history_file)
+
+    # Enable advanced CLI features like arrow key navigation, shortcuts
+    readline.parse_and_bind("tab: complete")  # Tab for auto-completion (if applicable)
+    readline.parse_and_bind(
+        "set editing-mode emacs"
+    )  # Default line editing (bash-like)
+
     print("Welcome to the K8s Mock Exam with syntax check for kubectl & kubeadm!\n")
 
     for i, qa in enumerate(Q_AND_A, start=1):
@@ -32,7 +54,6 @@ def main():
                 print(f"  - {note}")
 
         print("-" * 70, "\n")
-
     print("All questions done! Good luck with your Kubernetes journey.\n")
 
 
