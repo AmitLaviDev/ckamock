@@ -154,3 +154,43 @@ def get_user_commands_with_syntax_check() -> list:
         validated_commands.append(line)
 
     return validated_commands
+
+
+def check_against_checklist(final_answer: str, checklist: list):
+    """
+    Compare the user's final answer to the question's checklist.
+    Returns (found, missing) items based on a simple substring match.
+    """
+    found = []
+    missing = []
+    user_lower = final_answer.lower()
+
+    for item in checklist:
+        if item.lower() in user_lower:
+            found.append(item)
+        else:
+            missing.append(item)
+    return found, missing
+
+
+def special_mock_output_q10(user_answer: str):
+    """
+    Handles special cases for Question 10 where pipes/filters are required.
+    Simulates output to help users identify missing parts.
+    """
+    user_lower = user_answer.lower()
+
+    # Missing 'grep -i ready'
+    if "kubectl get nodes" in user_lower and "grep -i ready" not in user_lower:
+        print("[MOCK OUTPUT] Missing '| grep -i ready'. Example output:\n")
+        print("NAME         STATUS     ROLES    AGE   VERSION")
+        print("k8s-master   Ready      master   12d   v1.19.0")
+        print("wk8s-node-0  NotReady   <none>   11d   v1.19.0\n")
+
+    # Missing 'grep -i noschedule'
+    if (
+        "kubectl describe nodes" in user_lower
+        and "grep -i noschedule" not in user_lower
+    ):
+        print("[MOCK OUTPUT] Missing '| grep -i noSchedule'. Example taints:\n")
+        print("Taints: node-role.kubernetes.io/master:NoSchedule\n")
