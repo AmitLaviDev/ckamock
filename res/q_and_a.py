@@ -34,9 +34,6 @@ Q_AND_A = [
             "--clusterrole=deployment-clusterrole",
             "--serviceaccount=app-team1:cicd-token",
         ],
-        "notes": [
-            "Watch out: The original text had '--serviceaccount=default:cicd-token'. The correct approach uses 'app-team1:cicd-token'."
-        ],
         "special_handling": None,
     },
     {
@@ -184,9 +181,6 @@ Q_AND_A = [
             "kubernetes.io/metadata.name: internal",
             "ports:",
             "- port: 9000",
-        ],
-        "notes": [
-            "We simplified the official answer to highlight same-namespace access. Real usage may differ."
         ],
         "special_handling": None,
     },
