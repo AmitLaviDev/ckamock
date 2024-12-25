@@ -154,24 +154,36 @@ Q_AND_A = [
             apiVersion: networking.k8s.io/v1
             kind: NetworkPolicy
             metadata:
-              name: allow-port-from-namespace
-              namespace: internal
+                name: allow-port-from-namespace
+                namespace: internal
             spec:
-              podSelector:
-                matchLabels: {}
-              ingress:
-              - from:
-                - podSelector: {}    # same namespace
-              - ports:
-                - port: 9000
+                podSelector:
+                    matchLabels: {}
+                ingress:
+                - from:
+                    - namespaceSelector:
+                        matchLabels:
+                            kubernetes.io/metadata.name: internal
+                    ports:
+                    - port: 9000
         """
         ),
         "checklist": [
             "apiVersion: networking.k8s.io/v1",
             "kind: NetworkPolicy",
+            "metadata:",
             "name: allow-port-from-namespace",
             "namespace: internal",
-            "port: 9000",
+            "spec:",
+            "podSelector:",
+            "matchLabels: {}",
+            "ingress:",
+            "- from:",
+            "- namespaceSelector:",
+            "matchLabels:",
+            "kubernetes.io/metadata.name: internal",
+            "ports:",
+            "- port: 9000",
         ],
         "notes": [
             "We simplified the official answer to highlight same-namespace access. Real usage may differ."
