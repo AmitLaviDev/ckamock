@@ -129,7 +129,7 @@ Q_AND_A = [
         ),
         "checklist": [
             "ETCDCTL_API=3",
-            '--endpoints="https://127.0.0.1:2379"',
+            "--endpoints=https://127.0.0.1:2379",
             "--cacert=/opt/KUIN00601/ca.crt",
             "--cert=/opt/KUIN00601/etcd-client.crt",
             "--key=/opt/KUIN00601/etcd-client.key",
