@@ -534,9 +534,7 @@ Q_AND_A = [
             "volumeMounts:",
             "emptyDir: {}",
         ],
-        "notes": [
-            "Original text had a mismatch: 'legacy-ap.log'. Now corrected to 'legacy-app.log'."
-        ],
+        "notes": [],
         "special_handling": None,
     },
     {
