@@ -380,7 +380,6 @@ Q_AND_A = [
             "image: memcached",
             "image: consul",
         ],
-        "notes": ["Watch out for spelling: it's 'memcached', not 'memchached'!"],
         "special_handling": None,
     },
     {
