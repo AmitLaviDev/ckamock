@@ -209,14 +209,19 @@ Q_AND_A = [
         """
         ),
         "checklist": [
+            "kubectl describe deployment front-end",
+            "spec:",
+            "containers:",
+            "- name: nginx",
+            "image: nginx",
             "ports:",
-            "name: http",
+            "- name: http",
             "containerPort: 80",
             "kubectl expose deployment front-end",
+            "--name=front-end-svc",
+            "--port=80",
+            "--target-port=80",
             "--type=NodePort",
-        ],
-        "notes": [
-            "The official answer originally only had 'kubectl expose', but we also need the container port in the Deployment spec."
         ],
         "special_handling": None,
     },
@@ -250,6 +255,7 @@ Q_AND_A = [
                         name: hi
                         port:
                           number: 5678
+            kubectl apply -f ingress.yaml
         """
         ),
         "checklist": [
