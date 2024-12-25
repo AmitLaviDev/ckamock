@@ -395,8 +395,6 @@ Q_AND_A = [
             kind: PersistentVolume
             metadata:
               name: app-config
-              labels:
-                type: local
             spec:
               capacity:
                 storage: 1Gi
@@ -413,7 +411,6 @@ Q_AND_A = [
             "hostPath",
             "/srv/app-config",
         ],
-        "notes": [],
         "special_handling": None,
     },
     {
@@ -482,13 +479,13 @@ Q_AND_A = [
         ),
         "reference": textwrap.dedent(
             """\
-            kubectl logs foobar | grep unable-to-access-website > /opt/KUTR00101/foobar
+            kubectl logs foobar | grep 'unable-to-access-website' > /opt/KUTR00101/foobar
             cat /opt/KUTR00101/foobar
         """
         ),
         "checklist": [
             "kubectl logs foobar",
-            "grep unable-to-access-website",
+            "grep 'unable-to-access-website'",
             "> /opt/KUTR00101/foobar",
         ],
         "notes": [],
