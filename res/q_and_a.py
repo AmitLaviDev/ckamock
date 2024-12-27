@@ -121,7 +121,9 @@ Q_AND_A = [
             ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \\
                 --cacert=/opt/KUIN00601/ca.crt \\
                 --cert=/opt/KUIN00601/etcd-client.crt \\
-                --key=/opt/KUIN00601/etcd-client.key snapshot restore /var/lib/backup/etcd-snapshot-previous.db
+                --key=/opt/KUIN00601/etcd-client.key \\
+                --data-dir=/var/lib/backup/etcd-snapshot-previous.db \\
+                snapshot restore
         """
         ),
         "checklist": [
@@ -131,7 +133,8 @@ Q_AND_A = [
             "--cert=/opt/KUIN00601/etcd-client.crt",
             "--key=/opt/KUIN00601/etcd-client.key",
             "snapshot save /srv/data/etcd-snapshot.db",
-            "snapshot restore /var/lib/backup/etcd-snapshot-previous.db",
+            "--data-dir=/var/lib/backup/etcd-snapshot-previous.db",
+            "snapshot restore",
         ],
         "notes": [
             "Original text had mismatches like /etc/data or 'previoys.db'. This corrected version uses /srv/data and 'previous.db'."
